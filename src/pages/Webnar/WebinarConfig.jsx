@@ -23,27 +23,55 @@ export function WebinarConfig() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Extrai o ID do vídeo do Panda (lógica simples)
+  // --- LÓGICA DE EXTRAÇÃO BLINDADA ---
   const extractPandaId = (url) => {
     if (!url) return '';
-    if (url.includes('v=')) return url.split('v=')[1].split('&')[0];
-    return url; 
+    const cleanUrl = url.trim();
+
+    // 1. Se o usuário colou só o ID (sem link), retorna ele mesmo
+    if (!cleanUrl.includes('http') && !cleanUrl.includes('pandavideo')) {
+        return cleanUrl;
+    }
+
+    try {
+        // 2. Tenta processar como URL válida
+        const urlObj = new URL(cleanUrl);
+
+        // Pega o parâmetro 'v' (ex: ?v=4f08b875...)
+        const vParam = urlObj.searchParams.get('v');
+        if (vParam) return vParam;
+
+        // Se não tiver ?v=, tenta achar um UUID no meio da URL (ex: links de playlist)
+        const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+        const match = cleanUrl.match(uuidRegex);
+        if (match) return match[0];
+
+    } catch (e) {
+        console.warn("URL inválida ou formato desconhecido:", e);
+    }
+
+    // Fallback: retorna o texto limpo se nada funcionar (mas avisa no log)
+    return cleanUrl;
   };
 
   // Passo 1: Salvar Vídeo
   const handleSaveVideo = async () => {
     const videoId = extractPandaId(formData.videoUrl);
     
-    if (!videoId) {
-      alert("Por favor, insira uma URL válida ou ID do vídeo.");
+    // Validação de segurança: se o ID ainda parecer uma URL, bloqueia
+    if (!videoId || videoId.length < 5 || videoId.includes('http')) {
+      alert("ID Inválido! Por favor, cole o link de Embed do Panda (que tem '?v=...') ou apenas o ID.");
       return;
     }
+
+    console.log("Tentando salvar Video ID:", videoId);
 
     try {
       if (webinarId) {
         // Atualiza existente
         const webinarRef = doc(db, "webinars", webinarId);
         await updateDoc(webinarRef, { videoId: videoId });
+        alert("Vídeo ATUALIZADO com sucesso!");
       } else {
         // Cria novo
         const docRef = await addDoc(collection(db, "webinars"), {
@@ -53,18 +81,19 @@ export function WebinarConfig() {
         });
         setWebinarId(docRef.id);
         localStorage.setItem('currentWebinarId', docRef.id);
+        alert("Vídeo SALVO com sucesso! ID do Webinar criado.");
       }
-      setOpenSection('basic'); // Avança para a próxima seção (acordeão)
+      setOpenSection('basic'); // Avança para a próxima seção
     } catch (e) {
-      console.error("Erro ao salvar vídeo: ", e);
-      alert("Erro ao salvar configuração.");
+      console.error("Erro no Firebase:", e);
+      alert("Erro ao salvar no banco de dados. Veja o console (F12).");
     }
   };
 
   // Passo 2: Salvar Configurações Básicas
   const handleSaveBasic = async () => {
     if (!webinarId) {
-        alert("Por favor, confirme o vídeo primeiro.");
+        alert("Por favor, confirme o vídeo primeiro (clique no botão Confirmar).");
         return;
     }
     
@@ -88,33 +117,13 @@ export function WebinarConfig() {
 
       <main className="max-w-5xl mx-auto p-8 pt-10">
 
-        {/* NAVEGAÇÃO SUPERIOR PADRONIZADA COM LINKS */}
         <div className="flex justify-center items-center gap-12 mb-12 border-b border-white/5 pb-10">
-          <StepItem
-            to="/webinars/config"
-            icon={<Settings size={18} />}
-            label="Configuration"
-            active={true}
-            completed={false}
-          />
-          <StepItem
-            to="/webinars/schedule"
-            icon={<Calendar size={18} />}
-            label="Schedules"
-          />
-          <StepItem
-            to="/webinars/registration"
-            icon={<ClipboardList size={18} />}
-            label="Registration"
-          />
-          <StepItem
-            to="/webinars/finish"
-            icon={<CheckCircle2 size={18} />}
-            label="Finish"
-          />
+          <StepItem to="/webinars/config" icon={<Settings size={18} />} label="Configuration" active={true} completed={false} />
+          <StepItem to="/webinars/schedule" icon={<Calendar size={18} />} label="Schedules" />
+          <StepItem to="/webinars/registration" icon={<ClipboardList size={18} />} label="Registration" />
+          <StepItem to="/webinars/finish" icon={<CheckCircle2 size={18} />} label="Finish" />
         </div>
 
-        {/* BOTÃO VOLTAR PARA O DASHBOARD */}
         <button
           onClick={() => navigate('/')}
           className="flex items-center gap-2 opacity-60 hover:opacity-100 mb-8 transition-all text-sm uppercase font-black tracking-widest"
@@ -127,7 +136,7 @@ export function WebinarConfig() {
           {/* SEÇÃO 1: SOURCE VIDEO */}
           <ConfigAccordion
             title="Source video"
-            summary={formData.videoUrl ? "Video selected" : "External video file"}
+            summary={formData.videoUrl ? `Selected: ${extractPandaId(formData.videoUrl)}` : "External video file"}
             isOpen={openSection === 'video'}
             onOpen={() => setOpenSection('video')}
           >
@@ -141,7 +150,6 @@ export function WebinarConfig() {
                   </div>
                 </label>
 
-                {/* ÁREA DE ANEXO / LINK DO VÍDEO */}
                 <div className="ml-9 p-6 bg-black/20 rounded-xl border border-white/5 space-y-4">
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase opacity-40 tracking-widest text-left">Video Source URL</label>
@@ -150,12 +158,12 @@ export function WebinarConfig() {
                         type="text"
                         value={formData.videoUrl}
                         onChange={(e) => handleChange('videoUrl', e.target.value)}
-                        placeholder="https://www.pandavideo.com.br/video/..."
+                        placeholder="Cole aqui o link do Panda (ex: https://.../embed/?v=ID)"
                         className="flex-1 bg-app-bg border border-white/10 rounded-lg p-3 outline-none focus:border-jam-blue/50 text-app-text text-sm transition-colors"
                       />
                       <button 
                         onClick={handleSaveVideo}
-                        className="bg-white/5 px-4 rounded-lg border border-white/10 text-xs font-bold hover:bg-white/10 transition-all uppercase tracking-widest"
+                        className="bg-white/5 px-4 rounded-lg border border-white/10 text-xs font-bold hover:bg-white/10 transition-all uppercase tracking-widest hover:text-jam-blue"
                       >
                         Confirm
                       </button>
