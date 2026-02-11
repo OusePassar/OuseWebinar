@@ -25,47 +25,29 @@ export function WebinarConfig() {
 
   // --- LÓGICA DE EXTRAÇÃO BLINDADA (LINK OU EMBED) ---
   const extractPandaId = (input) => {
-    if (!input) return '';
-    let cleanInput = input.trim();
+  if (!input) return '';
+  let cleanInput = input.trim();
 
-    // 0. Detectar e limpar Embed Code (Iframe)
-    // Se o usuário colou o código inteiro <iframe src="..."></iframe>
-    if (cleanInput.includes('<iframe') || cleanInput.includes('src=')) {
-        const srcMatch = cleanInput.match(/src=["'](.*?)["']/);
-        if (srcMatch && srcMatch[1]) {
-            cleanInput = srcMatch[1]; // Agora temos a URL limpa de dentro do embed
-        }
-    }
+  // Extrai URL de dentro de um iframe se necessário
+  if (cleanInput.includes('<iframe') || cleanInput.includes('src=')) {
+      const srcMatch = cleanInput.match(/src=["'](.*?)["']/);
+      if (srcMatch && srcMatch[1]) cleanInput = srcMatch[1];
+  }
 
-    // 1. Se o usuário colou só o ID (sem link e sem iframe), retorna ele mesmo
-    if (!cleanInput.includes('http') && !cleanInput.includes('pandavideo')) {
-        return cleanInput;
-    }
-
-    try {
-        // 2. Tenta processar como URL válida
-        const urlObj = new URL(cleanInput);
-
-        // Pega o parâmetro 'v' (ex: ?v=4f08b875...)
-        const vParam = urlObj.searchParams.get('v');
-        if (vParam) return vParam;
-
-        // Se não tiver ?v=, tenta achar um UUID no meio da URL
-        const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-        const match = cleanInput.match(uuidRegex);
-        if (match) return match[0];
-
-    } catch (e) {
-        console.warn("URL inválida, tentando regex direto no texto:", e);
-        // Fallback: Tenta achar UUID mesmo se a string não for uma URL válida
-        const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-        const match = cleanInput.match(uuidRegex);
-        if (match) return match[0];
-    }
-
-    // Fallback final: retorna o texto limpo (provavelmente vai falhar na validação se ainda for URL)
-    return cleanInput;
-  };
+  try {
+      const urlObj = new URL(cleanInput);
+      const vParam = urlObj.searchParams.get('v');
+      if (vParam) return vParam;
+      const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+      const match = cleanInput.match(uuidRegex);
+      return match ? match[0] : cleanInput;
+ 
+  } catch (e) {
+      const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+      const match = cleanInput.match(uuidRegex);
+      return match ? match[0] : cleanInput;
+  }
+};
 
   // Passo 1: Salvar Vídeo
   const handleSaveVideo = async () => {
