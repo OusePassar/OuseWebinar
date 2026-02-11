@@ -1,4 +1,3 @@
-// src/components/Header.jsx
 import { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { Link } from 'react-router-dom'; // Importação necessária
@@ -20,7 +19,7 @@ export function Header() {
   }, [isDark]);
 
   return (
-    <header className="bg-app-header border-b border-white/10 h-20 flex items-center justify-between px-8 sticky top-0 z-[100] shadow-xl transition-colors duration-300 w-full">
+    <header className="bg-app-header border-b border-white/10 h-20 flex items-center justify-between px-8 sticky top-0 z-100 shadow-xl transition-colors duration-300 w-full">
       
       {/* Transformamos o container da Logo e Texto em um Link */}
       <Link to="/" className="flex items-center gap-4 group cursor-pointer hover:opacity-80 transition-opacity">
