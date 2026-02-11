@@ -23,48 +23,61 @@ export function WebinarConfig() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // --- LÓGICA DE EXTRAÇÃO BLINDADA ---
-  const extractPandaId = (url) => {
-    if (!url) return '';
-    const cleanUrl = url.trim();
+  // --- LÓGICA DE EXTRAÇÃO BLINDADA (LINK OU EMBED) ---
+  const extractPandaId = (input) => {
+    if (!input) return '';
+    let cleanInput = input.trim();
 
-    // 1. Se o usuário colou só o ID (sem link), retorna ele mesmo
-    if (!cleanUrl.includes('http') && !cleanUrl.includes('pandavideo')) {
-        return cleanUrl;
+    // 0. Detectar e limpar Embed Code (Iframe)
+    // Se o usuário colou o código inteiro <iframe src="..."></iframe>
+    if (cleanInput.includes('<iframe') || cleanInput.includes('src=')) {
+        const srcMatch = cleanInput.match(/src=["'](.*?)["']/);
+        if (srcMatch && srcMatch[1]) {
+            cleanInput = srcMatch[1]; // Agora temos a URL limpa de dentro do embed
+        }
+    }
+
+    // 1. Se o usuário colou só o ID (sem link e sem iframe), retorna ele mesmo
+    if (!cleanInput.includes('http') && !cleanInput.includes('pandavideo')) {
+        return cleanInput;
     }
 
     try {
         // 2. Tenta processar como URL válida
-        const urlObj = new URL(cleanUrl);
+        const urlObj = new URL(cleanInput);
 
         // Pega o parâmetro 'v' (ex: ?v=4f08b875...)
         const vParam = urlObj.searchParams.get('v');
         if (vParam) return vParam;
 
-        // Se não tiver ?v=, tenta achar um UUID no meio da URL (ex: links de playlist)
+        // Se não tiver ?v=, tenta achar um UUID no meio da URL
         const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-        const match = cleanUrl.match(uuidRegex);
+        const match = cleanInput.match(uuidRegex);
         if (match) return match[0];
 
     } catch (e) {
-        console.warn("URL inválida ou formato desconhecido:", e);
+        console.warn("URL inválida, tentando regex direto no texto:", e);
+        // Fallback: Tenta achar UUID mesmo se a string não for uma URL válida
+        const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+        const match = cleanInput.match(uuidRegex);
+        if (match) return match[0];
     }
 
-    // Fallback: retorna o texto limpo se nada funcionar (mas avisa no log)
-    return cleanUrl;
+    // Fallback final: retorna o texto limpo (provavelmente vai falhar na validação se ainda for URL)
+    return cleanInput;
   };
 
   // Passo 1: Salvar Vídeo
   const handleSaveVideo = async () => {
     const videoId = extractPandaId(formData.videoUrl);
     
-    // Validação de segurança: se o ID ainda parecer uma URL, bloqueia
-    if (!videoId || videoId.length < 5 || videoId.includes('http')) {
-      alert("ID Inválido! Por favor, cole o link de Embed do Panda (que tem '?v=...') ou apenas o ID.");
+    // Validação de segurança
+    if (!videoId || videoId.length < 5 || videoId.includes('http') || videoId.includes('<iframe')) {
+      alert("ID não identificado! Cole o Link direto ou o código de Embed do Panda.");
       return;
     }
 
-    console.log("Tentando salvar Video ID:", videoId);
+    console.log("ID Extraído com sucesso:", videoId);
 
     try {
       if (webinarId) {
@@ -152,13 +165,13 @@ export function WebinarConfig() {
 
                 <div className="ml-9 p-6 bg-black/20 rounded-xl border border-white/5 space-y-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black uppercase opacity-40 tracking-widest text-left">Video Source URL</label>
+                    <label className="text-[10px] font-black uppercase opacity-40 tracking-widest text-left">Video Source URL or Embed Code</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={formData.videoUrl}
                         onChange={(e) => handleChange('videoUrl', e.target.value)}
-                        placeholder="Cole aqui o link do Panda (ex: https://.../embed/?v=ID)"
+                        placeholder="Cole o Link (https://...) ou Embed (<iframe...>)"
                         className="flex-1 bg-app-bg border border-white/10 rounded-lg p-3 outline-none focus:border-jam-blue/50 text-app-text text-sm transition-colors"
                       />
                       <button 
@@ -168,7 +181,7 @@ export function WebinarConfig() {
                         Confirm
                       </button>
                     </div>
-                    <p className="text-[10px] opacity-30 italic text-left">Support for YouTube, Vimeo, PandaVideo or direct MP4 links.</p>
+                    <p className="text-[10px] opacity-30 italic text-left">Suporta links diretos do Panda ou código de Embed (Iframe).</p>
                   </div>
 
                   {/* Preview Simulado */}
