@@ -10,14 +10,15 @@ import {
     Plus, 
     Link as LinkIcon, 
     ExternalLink,
-    Pencil
+    Pencil,
+    Trash2 // Importei o ícone de lixeira
 } from 'lucide-react';
 import ouseLogoWhite from '../images/logo_branca.png';
 import ouseLogoDark from '../images/logo_preta.png';
 
 // Importações do Firebase
 import { db } from '../lib/firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 
 export function Dashboard() {
     const navigate = useNavigate();
@@ -30,7 +31,7 @@ export function Dashboard() {
     // 1. Escuta mudanças no tema (Dark/Light)
     useEffect(() => {
         const checkTheme = () => setIsDark(!document.documentElement.classList.contains('light'));
-        checkTheme(); // Checa inicial
+        checkTheme(); 
         
         const observer = new MutationObserver(checkTheme);
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
@@ -41,7 +42,6 @@ export function Dashboard() {
     useEffect(() => {
         const fetchWebinars = async () => {
             try {
-                // Busca na coleção 'webinars', ordenando por data de criação (mais recente primeiro)
                 const q = query(collection(db, "webinars"), orderBy("createdAt", "desc"));
                 const querySnapshot = await getDocs(q);
                 
@@ -70,15 +70,31 @@ export function Dashboard() {
         return "Not scheduled yet";
     };
 
-    // Função para copiar o link ou abrir a sala
     const handleOpenLink = (id) => {
         navigate(`/live/${id}`);
     };
 
     const handleEdit = (id) => {
-        // Salva o ID no localStorage para editar e vai para config
         localStorage.setItem('currentWebinarId', id);
         navigate('/webinars/config');
+    };
+
+    // --- NOVA FUNÇÃO DE DELETAR ---
+    const handleDelete = async (id) => {
+        const confirmDelete = window.confirm("Tem certeza que deseja excluir este webinar? Essa ação não pode ser desfeita.");
+        
+        if (confirmDelete) {
+            try {
+                // Deleta do Firebase
+                await deleteDoc(doc(db, "webinars", id));
+                
+                // Atualiza a lista localmente para sumir na hora sem precisar recarregar
+                setWebinarsList(prevList => prevList.filter(item => item.id !== id));
+            } catch (error) {
+                console.error("Erro ao deletar:", error);
+                alert("Erro ao excluir o webinar. Tente novamente.");
+            }
+        }
     };
 
     return (
@@ -112,7 +128,6 @@ export function Dashboard() {
                             <p className="text-sm opacity-60 mt-1">Manage your events and recordings.</p>
                         </div>
 
-                        {/* Botão Novo Webinar - Limpa o ID atual para criar um novo do zero */}
                         <Link
                             to="/webinars/new"
                             onClick={() => localStorage.removeItem('currentWebinarId')}
@@ -136,7 +151,6 @@ export function Dashboard() {
                                 <div key={webinar.id} className="bg-app-card border border-black/5 dark:border-white/5 rounded-lg p-6 hover:border-jam-blue/50 transition-all shadow-sm group">
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                         
-                                        {/* Informações do Webinar */}
                                         <div className="flex items-center gap-4">
                                             <div className="p-3 bg-jam-blue/10 rounded-lg text-jam-blue group-hover:scale-110 transition-transform">
                                                 <Video size={24} />
@@ -152,7 +166,6 @@ export function Dashboard() {
                                             </div>
                                         </div>
 
-                                        {/* Ações */}
                                         <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest opacity-80">
                                             <button 
                                                 onClick={() => handleEdit(webinar.id)}
@@ -166,6 +179,15 @@ export function Dashboard() {
                                                 className="bg-jam-blue/10 text-jam-blue px-4 py-2 rounded border border-jam-blue/20 flex items-center gap-2 hover:bg-jam-blue hover:text-white transition-all"
                                             >
                                                 <ExternalLink size={14} /> Open Live
+                                            </button>
+
+                                            {/* BOTÃO DE DELETAR */}
+                                            <button 
+                                                onClick={() => handleDelete(webinar.id)}
+                                                className="flex items-center gap-2 text-red-500/60 hover:text-red-500 transition-colors p-2 hover:bg-red-500/10 rounded"
+                                                title="Delete Webinar"
+                                            >
+                                                <Trash2 size={16} />
                                             </button>
                                         </div>
                                     </div>
