@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { WebinarChat } from '../../components/WebinarChat'; 
-import { Header } from '../../components/header';
+import { Header } from '../../components/headerforRoom';
 import { Clock, AlertCircle } from 'lucide-react';
 
 export function WebinarRoom() {
@@ -151,7 +151,7 @@ export function WebinarRoom() {
                  </main>
 
                  {/* LADO DIREITO: CHAT */}
-                 <aside className="w-full lg:w-100 bg-white border-l border-white/10 flex flex-col h-[500px] lg:h-auto shrink-0">
+                 <aside className="w-full lg:w-100 bg-white border-l border-white/10 flex flex-col h-125 lg:h-auto shrink-0">
                      {/* Só renderiza o chat se a sessão estiver definida, para garantir o filtro de mensagens */}
                      {currentSessionStart && (
                         <WebinarChat webinarId={id} sessionStart={currentSessionStart} />
