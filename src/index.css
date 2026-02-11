@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ouse-yellow: #ffb800;
+  --color-jam-blue: #2f81f7;
+  --color-jam-success: #2ea44f;
+  
+  /* Cores Dinâmicas */
+  --color-app-bg: #0f1116;
+  --color-app-card: #1c2128;
+  --color-app-sidebar: #161b22;
+  --color-app-text: #f1f5f9;
+}
+
+.light {
+  --color-app-bg: #f8fafc;
+  --color-app-card: #ffffff;
+  --color-app-sidebar: #ffffff;
+  --color-app-text: #0f172a;
+}
+
+@layer base {
+  body {
+    @apply bg-app-bg text-app-text transition-colors duration-300;
+  }
+}
