@@ -105,10 +105,7 @@ export function WebinarRoom() {
     // --- LAYOUT PRINCIPAL DA SALA ---
     return (
         <div className="min-h-screen bg-[#0F0F0F] flex flex-col font-sans overflow-hidden">
-             {/* Header Fixo */}
-             <div className="border-b border-white/10 shrink-0">
-                 <Header /> 
-             </div>
+             
 
              {/* Container Flex: Vídeo (Esq) + Chat (Dir) */}
              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden h-full">
