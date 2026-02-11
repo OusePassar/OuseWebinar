@@ -2,20 +2,21 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../components/header';
 import { StepItem } from '../../components/StepItem';
+import { db } from '../../lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { 
   Settings, 
   Calendar, 
   ClipboardList, 
   CheckCircle2, 
-  Plus, 
   X, 
   Pencil, 
-  Info, 
   ChevronLeft 
 } from 'lucide-react';
 
 export default function WebinarSchedule() {
   const navigate = useNavigate();
+  const webinarId = localStorage.getItem('currentWebinarId');
 
   const [schedules, setSchedules] = useState([
     { id: 1, date: '2025-12-23', time: '07:00 PM' }
@@ -38,8 +39,48 @@ export default function WebinarSchedule() {
     setSchedules(schedules.filter(s => s.id !== id));
   };
 
+  // Converte "07:00 PM" para "19:00" (Necessário para criar Date objects corretos)
+  const convertTo24Hour = (timeStr) => {
+    const [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':');
+    if (hours === '12') { hours = '00'; }
+    if (modifier === 'PM') { hours = parseInt(hours, 10) + 12; }
+    return `${hours}:${minutes}`;
+  };
+
+  const saveAndNext = async () => {
+    if (!webinarId) {
+        alert("Erro: Nenhum webinar selecionado. Volte para a configuração.");
+        return;
+    }
+
+    try {
+        // Formata os horários para um formato ISO que o "Fake Live" consiga ler
+        const formattedSchedules = schedules.map(s => {
+            // Cria um ISO String completo (ex: 2025-12-23T19:00:00)
+            const isoString = `${s.date}T${convertTo24Hour(s.time)}:00`;
+            return {
+                id: s.id,
+                startDate: isoString,
+                displayDate: s.date,
+                displayTime: s.time
+            };
+        });
+
+        const webinarRef = doc(db, "webinars", webinarId);
+        await updateDoc(webinarRef, {
+            schedules: formattedSchedules,
+            status: 'active' // Define como ativo/pronto
+        });
+
+        navigate('/webinars/registration');
+    } catch (error) {
+        console.error("Erro ao salvar agendamentos:", error);
+        alert("Erro ao salvar agendamentos.");
+    }
+  };
+
   return (
-    // Alterado: bg-app-bg e text-app-text para responder ao tema
     <div className="min-h-screen bg-app-bg text-app-text transition-colors duration-300">
       <Header />
       
@@ -59,7 +100,6 @@ export default function WebinarSchedule() {
           <ChevronLeft size={20} /> Back to Configuration
         </button>
 
-        {/* Alterado: bg-app-card para responder ao tema */}
         <div className="bg-app-card rounded-xl border border-white/10 shadow-2xl overflow-hidden transition-colors duration-300">
           
           <div className="p-6 border-b border-white/10 flex justify-between items-center bg-black/5">
@@ -72,7 +112,7 @@ export default function WebinarSchedule() {
                 Cancel
               </button>
               <button 
-                onClick={() => navigate('/webinars/registration')}
+                onClick={saveAndNext}
                 className="px-5 py-2 rounded-md bg-jam-blue text-white font-bold hover:bg-blue-600 text-xs uppercase tracking-wider transition-all shadow-lg shadow-blue-500/20 active:scale-95"
               >
                 Save & Next
@@ -82,7 +122,6 @@ export default function WebinarSchedule() {
 
           <div className="p-8 space-y-8">
             
-            {/* Input de nova série ajustado para temas */}
             <div className="bg-black/10 p-6 rounded-xl border border-white/5 flex flex-wrap lg:flex-nowrap gap-6 items-end">
               <div className="flex-none">
                 <div className="bg-jam-blue text-white text-[10px] font-black px-2 py-1 rounded mb-2 w-fit tracking-tighter italic">NEW SERIES</div>
@@ -157,7 +196,7 @@ export default function WebinarSchedule() {
               Back
             </button>
             <button 
-              onClick={() => navigate('/webinars/registration')} 
+              onClick={saveAndNext}
               className="px-14 py-3 rounded-md bg-jam-blue text-white font-black uppercase text-xs tracking-[0.2em] hover:bg-blue-600 shadow-2xl shadow-blue-500/30 transition-all active:scale-95"
             >
               Next Step

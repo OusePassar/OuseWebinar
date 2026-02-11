@@ -3,10 +3,84 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../../components/header';
 import { StepItem } from '../../components/StepItem';
 import { Settings, Calendar, ClipboardList, CheckCircle2, ChevronLeft, Pencil, MonitorPlay } from 'lucide-react';
+import { db } from '../../lib/firebase';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 
 export function WebinarConfig() {
   const navigate = useNavigate();
   const [openSection, setOpenSection] = useState('video');
+  const [webinarId, setWebinarId] = useState(localStorage.getItem('currentWebinarId') || null);
+  
+  // Estado para armazenar os dados do formulário
+  const [formData, setFormData] = useState({
+    videoUrl: '',
+    internalTitle: '',
+    publicTitle: ''
+  });
+
+  // Função para atualizar o estado dos inputs
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Extrai o ID do vídeo do Panda (lógica simples)
+  const extractPandaId = (url) => {
+    if (!url) return '';
+    if (url.includes('v=')) return url.split('v=')[1].split('&')[0];
+    return url; 
+  };
+
+  // Passo 1: Salvar Vídeo
+  const handleSaveVideo = async () => {
+    const videoId = extractPandaId(formData.videoUrl);
+    
+    if (!videoId) {
+      alert("Por favor, insira uma URL válida ou ID do vídeo.");
+      return;
+    }
+
+    try {
+      if (webinarId) {
+        // Atualiza existente
+        const webinarRef = doc(db, "webinars", webinarId);
+        await updateDoc(webinarRef, { videoId: videoId });
+      } else {
+        // Cria novo
+        const docRef = await addDoc(collection(db, "webinars"), {
+          videoId: videoId,
+          createdAt: new Date(),
+          status: 'draft'
+        });
+        setWebinarId(docRef.id);
+        localStorage.setItem('currentWebinarId', docRef.id);
+      }
+      setOpenSection('basic'); // Avança para a próxima seção (acordeão)
+    } catch (e) {
+      console.error("Erro ao salvar vídeo: ", e);
+      alert("Erro ao salvar configuração.");
+    }
+  };
+
+  // Passo 2: Salvar Configurações Básicas
+  const handleSaveBasic = async () => {
+    if (!webinarId) {
+        alert("Por favor, confirme o vídeo primeiro.");
+        return;
+    }
+    
+    try {
+      const webinarRef = doc(db, "webinars", webinarId);
+      await updateDoc(webinarRef, {
+          internalTitle: formData.internalTitle,
+          publicTitle: formData.publicTitle
+      });
+      
+      navigate('/webinars/schedule');
+    } catch (e) {
+      console.error("Erro ao salvar dados básicos: ", e);
+      alert("Erro ao salvar dados.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-app-bg text-app-text transition-colors duration-300">
@@ -51,10 +125,9 @@ export function WebinarConfig() {
         <div className="space-y-4">
 
           {/* SEÇÃO 1: SOURCE VIDEO */}
-          {/* SEÇÃO 1: SOURCE VIDEO */}
           <ConfigAccordion
             title="Source video"
-            summary="External video file"
+            summary={formData.videoUrl ? "Video selected" : "External video file"}
             isOpen={openSection === 'video'}
             onOpen={() => setOpenSection('video')}
           >
@@ -75,10 +148,15 @@ export function WebinarConfig() {
                     <div className="flex gap-2">
                       <input
                         type="text"
+                        value={formData.videoUrl}
+                        onChange={(e) => handleChange('videoUrl', e.target.value)}
                         placeholder="https://www.pandavideo.com.br/video/..."
                         className="flex-1 bg-app-bg border border-white/10 rounded-lg p-3 outline-none focus:border-jam-blue/50 text-app-text text-sm transition-colors"
                       />
-                      <button className="bg-white/5 px-4 rounded-lg border border-white/10 text-xs font-bold hover:bg-white/10 transition-all uppercase tracking-widest">
+                      <button 
+                        onClick={handleSaveVideo}
+                        className="bg-white/5 px-4 rounded-lg border border-white/10 text-xs font-bold hover:bg-white/10 transition-all uppercase tracking-widest"
+                      >
                         Confirm
                       </button>
                     </div>
@@ -105,7 +183,7 @@ export function WebinarConfig() {
 
               <div className="flex justify-end gap-3 pt-6 border-t border-white/10">
                 <button
-                  onClick={() => setOpenSection('basic')}
+                  onClick={handleSaveVideo}
                   className="bg-jam-blue px-10 py-3 rounded-md font-black text-white uppercase text-xs tracking-widest active:scale-95 transition-all shadow-lg shadow-blue-500/20"
                 >
                   Confirm & Save
@@ -117,14 +195,26 @@ export function WebinarConfig() {
           {/* SEÇÃO 2: BASIC SETTINGS */}
           <ConfigAccordion
             title="Basic settings"
-            summary="Configured"
+            summary={formData.publicTitle ? "Configured" : "Not configured"}
             isOpen={openSection === 'basic'}
             onOpen={() => setOpenSection('basic')}
           >
             <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <InputGroup label="Webinar name" placeholder="Workshop - AO VIVO" hint="Private title." />
-                <InputGroup label="Webinar title" placeholder="Aula Secreta da Aprovação" hint="Public title." />
+                <InputGroup 
+                  label="Webinar name" 
+                  placeholder="Workshop - AO VIVO" 
+                  hint="Private title." 
+                  value={formData.internalTitle}
+                  onChange={(e) => handleChange('internalTitle', e.target.value)}
+                />
+                <InputGroup 
+                  label="Webinar title" 
+                  placeholder="Aula Secreta da Aprovação" 
+                  hint="Public title." 
+                  value={formData.publicTitle}
+                  onChange={(e) => handleChange('publicTitle', e.target.value)}
+                />
               </div>
 
               <div className="aspect-video bg-black/20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center">
@@ -133,7 +223,7 @@ export function WebinarConfig() {
 
               <div className="col-span-full flex justify-end gap-3 pt-6 border-t border-white/10">
                 <button
-                  onClick={() => navigate('/webinars/schedule')}
+                  onClick={handleSaveBasic}
                   className="bg-jam-blue px-12 py-3 rounded-md font-black text-white uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all shadow-blue-500/30"
                 >
                   Next Step
@@ -148,7 +238,7 @@ export function WebinarConfig() {
   );
 }
 
-// COMPONENTES AUXILIARES ADAPTÁVEIS AO TEMA
+// COMPONENTES AUXILIARES
 function ConfigAccordion({ title, summary, isOpen, onOpen, children }) {
   return (
     <div className={`bg-app-card rounded-xl border transition-all duration-300 ${isOpen ? 'border-jam-blue/40 shadow-2xl' : 'border-white/10'}`}>
@@ -168,13 +258,15 @@ function ConfigAccordion({ title, summary, isOpen, onOpen, children }) {
   );
 }
 
-function InputGroup({ label, placeholder, hint }) {
+function InputGroup({ label, placeholder, hint, value, onChange }) {
   return (
     <div className="w-full text-left">
       <label className="block text-[10px] uppercase font-black opacity-40 mb-2 tracking-widest">{label}</label>
       <input
         type="text"
         placeholder={placeholder}
+        value={value}
+        onChange={onChange}
         className="w-full bg-app-bg border border-white/10 rounded-lg p-3 outline-none focus:border-jam-blue/50 text-app-text text-sm transition-colors"
       />
       <p className="text-[10px] mt-1 opacity-30 text-right italic">{hint}</p>
