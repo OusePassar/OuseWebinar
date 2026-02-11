@@ -1,32 +1,90 @@
 import { useState, useEffect } from 'react';
 import { Header } from '../components/header';
-import { Link } from 'react-router-dom';
-import { LayoutDashboard, Video, BarChart3, Users, GraduationCap, Plus, Link as LinkIcon } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+    LayoutDashboard, 
+    Video, 
+    BarChart3, 
+    Users, 
+    GraduationCap, 
+    Plus, 
+    Link as LinkIcon, 
+    ExternalLink,
+    Pencil
+} from 'lucide-react';
 import ouseLogoWhite from '../images/logo_branca.png';
 import ouseLogoDark from '../images/logo_preta.png';
 
-const WEBINARS = [
-    { id: 1, title: 'Workshop - AO VIVO - 25/09 CLONE', date: 'Tuesday, 23 Dec 2025, 07:00 PM' },
-    { id: 2, title: 'Aula Secreta da Aprovação na PRF e PF', date: 'Wednesday, 10 Dec 2025, 08:00 PM' },
-];
+// Importações do Firebase
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 
 export function Dashboard() {
-    // Pegamos o estado do tema para controlar a logo da sidebar também
+    const navigate = useNavigate();
     const [isDark, setIsDark] = useState(true);
+    
+    // Estados para os dados
+    const [webinarsList, setWebinarsList] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // Escuta mudanças na classe 'light' para atualizar a logo lateral
+    // 1. Escuta mudanças no tema (Dark/Light)
     useEffect(() => {
-        const observer = new MutationObserver(() => {
-            setIsDark(!document.documentElement.classList.contains('light'));
-        });
+        const checkTheme = () => setIsDark(!document.documentElement.classList.contains('light'));
+        checkTheme(); // Checa inicial
+        
+        const observer = new MutationObserver(checkTheme);
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
         return () => observer.disconnect();
     }, []);
 
+    // 2. Busca os Webinars no Firebase
+    useEffect(() => {
+        const fetchWebinars = async () => {
+            try {
+                // Busca na coleção 'webinars', ordenando por data de criação (mais recente primeiro)
+                const q = query(collection(db, "webinars"), orderBy("createdAt", "desc"));
+                const querySnapshot = await getDocs(q);
+                
+                const data = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                setWebinarsList(data);
+            } catch (error) {
+                console.error("Erro ao buscar webinars:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchWebinars();
+    }, []);
+
+    // Função auxiliar para mostrar a data do primeiro agendamento
+    const getDisplayDate = (webinar) => {
+        if (webinar.schedules && webinar.schedules.length > 0) {
+            const first = webinar.schedules[0];
+            return `${first.displayDate} às ${first.displayTime}`;
+        }
+        return "Not scheduled yet";
+    };
+
+    // Função para copiar o link ou abrir a sala
+    const handleOpenLink = (id) => {
+        navigate(`/live/${id}`);
+    };
+
+    const handleEdit = (id) => {
+        // Salva o ID no localStorage para editar e vai para config
+        localStorage.setItem('currentWebinarId', id);
+        navigate('/webinars/config');
+    };
+
     return (
         <div className="flex min-h-screen bg-app-bg transition-colors duration-300">
             {/* Sidebar Lateral Dinâmica */}
-            <aside className="w-64 bg-app-sidebar border-r border-black/5 dark:border-white/5 flex flex-col transition-colors duration-300">
+            <aside className="w-64 bg-app-sidebar border-r border-black/5 dark:border-white/5 flex flex-col transition-colors duration-300 hidden md:flex">
                 <div className="p-6">
                     <img
                         src={isDark ? ouseLogoWhite : ouseLogoDark}
@@ -36,8 +94,8 @@ export function Dashboard() {
                 </div>
 
                 <nav className="flex-1 px-4 space-y-2">
-                    <NavItem icon={<LayoutDashboard size={20} />} label="Home" />
-                    <NavItem icon={<Video size={20} />} label="Webinars" active />
+                    <NavItem icon={<LayoutDashboard size={20} />} label="Home" active />
+                    <NavItem icon={<Video size={20} />} label="Webinars" />
                     <NavItem icon={<BarChart3 size={20} />} label="Analytics" />
                     <NavItem icon={<Users size={20} />} label="Registrants" />
                     <NavItem icon={<GraduationCap size={20} />} label="Training" />
@@ -47,43 +105,74 @@ export function Dashboard() {
             <main className="flex-1 flex flex-col">
                 <Header />
 
-                <div className="flex justify-between items-center mb-8">
-                    <h1 className="text-2xl font-semibold transition-colors duration-300">Webinars</h1>
-
-                    {/* Botão Ajustado para Link */}
-                    <Link
-                        to="/webinars/new"
-                        className="bg-jam-blue hover:bg-blue-600 text-white px-5 py-2.5 rounded-md flex items-center gap-2 font-bold transition-all shadow-lg shadow-jam-blue/20 hover:shadow-jam-blue/40 active:scale-95"
-                    >
-                        <Plus size={20} strokeWidth={3} />
-                        <span>Add webinar</span>
-                    </Link>
-                </div>
-
-                <div className="space-y-4">
-                    {WEBINARS.map(webinar => (
-                        <div key={webinar.id} className="bg-app-card border border-black/5 dark:border-white/5 rounded-lg p-6 hover:border-jam-blue/50 transition-all shadow-sm">
-                            <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-3 bg-jam-blue/10 rounded-lg text-jam-blue">
-                                        <Video size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold">{webinar.title}</h3>
-                                        <p className="text-sm opacity-60 mt-1 italic">{webinar.date}</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest opacity-50">
-                                    <button className="hover:text-jam-blue">Edit</button>
-                                    <button className="hover:text-jam-blue">Clone</button>
-                                    <button className="bg-jam-blue/10 text-jam-blue px-4 py-2 rounded border border-jam-blue/20 flex items-center gap-2 hover:bg-jam-blue hover:text-white transition-all">
-                                        <LinkIcon size={14} /> Links
-                                    </button>
-                                </div>
-                            </div>
+                <div className="p-8 max-w-7xl mx-auto w-full">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h1 className="text-2xl font-semibold transition-colors duration-300">Webinars</h1>
+                            <p className="text-sm opacity-60 mt-1">Manage your events and recordings.</p>
                         </div>
-                    ))}
+
+                        {/* Botão Novo Webinar - Limpa o ID atual para criar um novo do zero */}
+                        <Link
+                            to="/webinars/new"
+                            onClick={() => localStorage.removeItem('currentWebinarId')}
+                            className="bg-jam-blue hover:bg-blue-600 text-white px-5 py-2.5 rounded-md flex items-center gap-2 font-bold transition-all shadow-lg shadow-jam-blue/20 hover:shadow-jam-blue/40 active:scale-95"
+                        >
+                            <Plus size={20} strokeWidth={3} />
+                            <span>Add webinar</span>
+                        </Link>
+                    </div>
+
+                    <div className="space-y-4">
+                        {loading ? (
+                            <div className="text-center py-20 opacity-50 animate-pulse">Loading webinars...</div>
+                        ) : webinarsList.length === 0 ? (
+                            <div className="text-center py-20 border border-dashed border-white/10 rounded-xl bg-white/5">
+                                <p className="opacity-50 mb-4">You haven't created any webinars yet.</p>
+                                <Link to="/webinars/new" className="text-jam-blue font-bold hover:underline">Create your first webinar</Link>
+                            </div>
+                        ) : (
+                            webinarsList.map(webinar => (
+                                <div key={webinar.id} className="bg-app-card border border-black/5 dark:border-white/5 rounded-lg p-6 hover:border-jam-blue/50 transition-all shadow-sm group">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                        
+                                        {/* Informações do Webinar */}
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-jam-blue/10 rounded-lg text-jam-blue group-hover:scale-110 transition-transform">
+                                                <Video size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold">
+                                                    {webinar.internalTitle || webinar.publicTitle || "Untitled Webinar"}
+                                                </h3>
+                                                <div className="flex items-center gap-2 text-sm opacity-60 mt-1 italic">
+                                                    <span className={`w-2 h-2 rounded-full ${webinar.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                                                    {getDisplayDate(webinar)}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Ações */}
+                                        <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest opacity-80">
+                                            <button 
+                                                onClick={() => handleEdit(webinar.id)}
+                                                className="flex items-center gap-2 hover:text-jam-blue transition-colors p-2"
+                                            >
+                                                <Pencil size={14} /> Edit
+                                            </button>
+                                            
+                                            <button 
+                                                onClick={() => handleOpenLink(webinar.id)}
+                                                className="bg-jam-blue/10 text-jam-blue px-4 py-2 rounded border border-jam-blue/20 flex items-center gap-2 hover:bg-jam-blue hover:text-white transition-all"
+                                            >
+                                                <ExternalLink size={14} /> Open Live
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             </main>
         </div>
@@ -97,7 +186,6 @@ function NavItem({ icon, label, active = false }) {
         ? 'bg-jam-blue/10 text-jam-blue border-l-4 border-jam-blue rounded-l-none' 
         : 'opacity-60 hover:bg-black/5 dark:hover:bg-white/5 hover:opacity-100'
     }`}>
-      {/* O ícone dá um leve "pulo" quando você passa o mouse */}
       <div className="group-hover:scale-110 transition-transform duration-200">
         {icon}
       </div>

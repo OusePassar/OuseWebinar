@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../components/header';
 import { StepItem } from '../../components/StepItem';
 import { db } from '../../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { 
   Settings, 
   Calendar, 
@@ -18,65 +18,97 @@ export default function WebinarSchedule() {
   const navigate = useNavigate();
   const webinarId = localStorage.getItem('currentWebinarId');
 
-  const [schedules, setSchedules] = useState([
-    { id: 1, date: '2025-12-23', time: '07:00 PM' }
-  ]);
-
+  // Estado inicial vazio (será preenchido pelo useEffect)
+  const [schedules, setSchedules] = useState([]);
+  
+  // Estados do formulário
   const [inputDate, setInputDate] = useState('');
-  const [inputTime, setInputTime] = useState('12:00 PM');
+  const [inputTime, setInputTime] = useState('19:00'); // Padrão 19:00
+
+  // 1. CARREGAR AGENDAMENTOS EXISTENTES (A correção principal)
+  useEffect(() => {
+    const loadSchedules = async () => {
+      if (!webinarId) return;
+
+      try {
+        const docRef = doc(db, "webinars", webinarId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.schedules && data.schedules.length > 0) {
+            // Mapeia de volta para o formato que a tela usa
+            setSchedules(data.schedules.map(s => ({
+              id: s.id,
+              date: s.displayDate,
+              time: s.displayTime
+            })));
+          } else {
+             // Se não tiver nada salvo, inicia com um padrão
+             setSchedules([{ id: 1, date: new Date().toISOString().split('T')[0], time: '19:00' }]);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar agendamentos:", error);
+      }
+    };
+
+    loadSchedules();
+  }, [webinarId]);
 
   const addSchedule = () => {
-    if (!inputDate) {
-      alert("Por favor, selecione uma data válida.");
+    if (!inputDate || !inputTime) {
+      alert("Por favor, selecione uma data e um horário.");
       return;
     }
     const newSession = { id: Date.now(), date: inputDate, time: inputTime };
     setSchedules([...schedules, newSession]);
-    setInputDate('');
+    // Limpa apenas a data para facilitar inserção em massa, ou ambos se preferir
+    setInputDate(''); 
   };
 
   const removeSchedule = (id) => {
     setSchedules(schedules.filter(s => s.id !== id));
   };
 
-  // Converte "07:00 PM" para "19:00" (Necessário para criar Date objects corretos)
-  const convertTo24Hour = (timeStr) => {
-    const [time, modifier] = timeStr.split(' ');
-    let [hours, minutes] = time.split(':');
-    if (hours === '12') { hours = '00'; }
-    if (modifier === 'PM') { hours = parseInt(hours, 10) + 12; }
-    return `${hours}:${minutes}`;
-  };
-
   const saveAndNext = async () => {
     if (!webinarId) {
-        alert("Erro: Nenhum webinar selecionado. Volte para a configuração.");
+        alert("Erro: ID do webinar não encontrado. Volte para a configuração.");
+        return;
+    }
+
+    if (schedules.length === 0) {
+        alert("Adicione pelo menos um horário antes de continuar.");
         return;
     }
 
     try {
-        // Formata os horários para um formato ISO que o "Fake Live" consiga ler
+        // Formata para salvar no banco
         const formattedSchedules = schedules.map(s => {
-            // Cria um ISO String completo (ex: 2025-12-23T19:00:00)
-            const isoString = `${s.date}T${convertTo24Hour(s.time)}:00`;
+            // Como usamos type="time", o s.time já é "HH:MM" (24h)
+            // Criamos a ISO String: "2025-12-23T19:00:00"
+            const isoString = `${s.date}T${s.time}:00`;
+            
             return {
                 id: s.id,
-                startDate: isoString,
-                displayDate: s.date,
-                displayTime: s.time
+                startDate: isoString,     // Usado pelo Player (Date Object)
+                displayDate: s.date,      // Usado para exibir na tela (String)
+                displayTime: s.time       // Usado para exibir na tela (String)
             };
         });
 
         const webinarRef = doc(db, "webinars", webinarId);
+        
         await updateDoc(webinarRef, {
             schedules: formattedSchedules,
-            status: 'active' // Define como ativo/pronto
+            status: 'active'
         });
 
+        console.log("Salvo com sucesso!", formattedSchedules);
         navigate('/webinars/registration');
     } catch (error) {
-        console.error("Erro ao salvar agendamentos:", error);
-        alert("Erro ao salvar agendamentos.");
+        console.error("Erro ao salvar:", error);
+        alert("Erro ao salvar agendamentos. Verifique o console.");
     }
   };
 
@@ -143,11 +175,11 @@ export default function WebinarSchedule() {
 
               <div className="flex-1 min-w-30">
                 <label className="text-[10px] font-black uppercase opacity-40 mb-2 block tracking-[0.2em] text-left">Horário</label>
+                {/* MUDANÇA IMPORTANTE: type="time" para evitar erros de formatação */}
                 <input 
-                  type="text" 
+                  type="time" 
                   value={inputTime}
                   onChange={(e) => setInputTime(e.target.value)}
-                  placeholder="12:00 PM"
                   className="w-full bg-app-bg border border-white/10 p-2.5 rounded text-sm outline-none focus:border-jam-blue" 
                 />
               </div>
@@ -161,14 +193,19 @@ export default function WebinarSchedule() {
             </div>
 
             <div className="space-y-3">
+              {schedules.length === 0 && (
+                  <p className="text-center opacity-40 italic text-sm py-4">Nenhum horário adicionado.</p>
+              )}
               {schedules.map(s => (
                 <div key={s.id} className="bg-white/5 p-5 rounded-xl flex justify-between items-center border border-white/5 group hover:border-jam-blue/30 transition-all">
                   <div className="flex items-center gap-6 text-left">
-                    <div className="bg-jam-blue/10 text-jam-blue text-[10px] font-black px-2 py-1 rounded border border-jam-blue/20 italic tracking-tighter">1 SERIES</div>
-                    <div className="text-sm font-bold tracking-tight italic opacity-80">On {s.date} at {s.time}</div>
+                    <div className="bg-jam-blue/10 text-jam-blue text-[10px] font-black px-2 py-1 rounded border border-jam-blue/20 italic tracking-tighter">SESSION</div>
+                    {/* Exibe a data e hora formatadas */}
+                    <div className="text-sm font-bold tracking-tight italic opacity-80">
+                        {s.date} às {s.time}
+                    </div>
                   </div>
                   <div className="flex gap-4 opacity-0 group-hover:opacity-100 transition-all">
-                    <button className="p-2 hover:bg-jam-blue/10 rounded-lg text-jam-blue"><Pencil size={16}/></button>
                     <button onClick={() => removeSchedule(s.id)} className="p-2 hover:bg-red-500/10 rounded-lg text-red-500"><X size={18} /></button>
                   </div>
                 </div>
