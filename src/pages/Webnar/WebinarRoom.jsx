@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { WebinarChat } from '../../components/WebinarChat'; 
-import { Header } from '../../components/headerforRoom';
+import { HeaderForRoom as Header } from '../../components/headerforRoom';
 import { Clock, AlertCircle } from 'lucide-react';
 
 export function WebinarRoom() {
