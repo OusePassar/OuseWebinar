@@ -169,10 +169,6 @@ export function WebinarRoom() {
  * @param {number} startTime - Segundo onde o vídeo deve começar
  */
 function FakeLivePlayer({ videoId, startTime }) {
-  // Monta a URL do Panda com:
-  // - currentTime: pula para o segundo da sincronização
-  // - autoplay: inicia automaticamente
-  // - controls=false: remove a barra de progresso para simular live
   const pandaUrl = `https://player-vz-7023366c-48c.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false`;
 
   return (
@@ -183,9 +179,8 @@ function FakeLivePlayer({ videoId, startTime }) {
         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" 
         allowFullScreen={true} 
         style={{ border: 'none' }}
+        referrerPolicy="origin" 
       ></iframe>
-      
-      {/* Camada transparente invisível sobre o vídeo para impedir que o usuário clique no botão de pausa ou barra de tempo */}
       <div className="absolute inset-0 z-10 bg-transparent cursor-default"></div> 
     </div>
   );
