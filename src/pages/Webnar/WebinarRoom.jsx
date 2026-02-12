@@ -13,7 +13,7 @@ export function WebinarRoom() {
     const [startTime, setStartTime] = useState(null); 
     const [currentSessionStart, setCurrentSessionStart] = useState(null);
     
-    // Usamos um Ref para garantir que o cálculo só aconteça uma vez por carregamento
+    // Ref para evitar múltiplos cálculos de sincronização
     const hasCalculated = useRef(false);
 
     const checkSchedule = useCallback((data) => {
@@ -23,6 +23,7 @@ export function WebinarRoom() {
         const activeSchedule = data.schedules.find(s => {
             const scheduleDate = new Date(s.startDate);
             const diffInMinutes = (now - scheduleDate) / 1000 / 60;
+            // Considera live se começou há menos de 120min ou começa em breve
             return diffInMinutes > -10 && diffInMinutes < 120; 
         });
 
@@ -39,11 +40,13 @@ export function WebinarRoom() {
         if (diffSeconds < 0) {
             setStatus('waiting');
         } else {
-            // Sincronização Absoluta
-            const timeToStart = Math.floor(diffSeconds);
-            setStartTime(timeToStart);
-            setStatus('live');
-            hasCalculated.current = true;
+            // SINCRONIZAÇÃO ÚNICA: Só define o startTime se ainda não foi feito
+            if (!hasCalculated.current) {
+                const timeToStart = Math.floor(diffSeconds);
+                setStartTime(timeToStart);
+                hasCalculated.current = true;
+                setStatus('live');
+            }
         }
     }, []);
 
@@ -61,17 +64,36 @@ export function WebinarRoom() {
                     setStatus('error');
                 }
             } catch (error) {
-                setStatus('error', error);
+                setStatus('error');
             }
         };
         fetchWebinar();
     }, [id, checkSchedule]);
 
-    // Spinner robusto que impede o player de carregar no segundo 0
+    // Intervalo apenas para quem está na tela de espera (Waiting -> Live)
+    useEffect(() => {
+        if (status !== 'waiting') return;
+
+        const interval = setInterval(() => {
+            if (webinar) checkSchedule(webinar);
+        }, 10000); // Checa a cada 10 segundos até começar
+
+        return () => clearInterval(interval);
+    }, [webinar, status, checkSchedule]);
+
     if (status === 'loading' || (status === 'live' && startTime === null)) {
         return (
             <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
+            </div>
+        );
+    }
+
+    if (status === 'error') {
+        return (
+            <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center text-white flex-col gap-4">
+                <AlertCircle size={48} className="text-red-500" />
+                <h1 className="text-2xl font-bold">Webinar não encontrado</h1>
             </div>
         );
     }
@@ -88,9 +110,9 @@ export function WebinarRoom() {
                                 <h1 className="text-3xl font-bold">A aula começará em breve</h1>
                             </div>
                         ) : (
-                            // A KEY dinâmica força o player a carregar no tempo certo e ignora cache
+                            // MELHORIA: A key fixa impede o reset a cada atualização de estado
                             <FakeLivePlayer 
-                                key={`player-${id}-${startTime}`} 
+                                key={`live-player-${id}`} 
                                 videoId={webinar.videoId} 
                                 startTime={startTime} 
                             />
@@ -112,7 +134,7 @@ export function WebinarRoom() {
 }
 
 function FakeLivePlayer({ videoId, startTime }) {
-  // Adicionamos um parâmetro t= no final da URL para quebrar qualquer cache de sessão do Panda
+  // O parâmetro t=startTime garante que ao carregar a primeira vez, vá para o tempo certo
   const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false&t=${startTime}`;
 
   return (
