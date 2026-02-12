@@ -11,19 +11,18 @@ export function WebinarRoom() {
     
     const [webinar, setWebinar] = useState(null);
     const [status, setStatus] = useState('loading'); 
-    const [startTime, setStartTime] = useState(null); // Iniciamos como null para travar o player
+    const [startTime, setStartTime] = useState(null); // Trava o player até o cálculo terminar
     const [currentSessionStart, setCurrentSessionStart] = useState(null);
 
-    // FUNÇÃO UNIVERSAL DE SINCRONIZAÇÃO
+    // FUNÇÃO UNIVERSAL DE SINCRONIZAÇÃO (Garante que Joana e José vejam o mesmo tempo)
     const checkSchedule = useCallback((data) => {
         if (!data || !data.schedules) return;
 
         const now = new Date();
-        // Encontra a sessão que deve estar acontecendo agora
         const activeSchedule = data.schedules.find(s => {
             const scheduleDate = new Date(s.startDate);
             const diffInMinutes = (now - scheduleDate) / 1000 / 60;
-            // Considera live se começou há menos de 2 horas ou começa em 10 min
+            // Considera live se começou há menos de 2 horas
             return diffInMinutes > -10 && diffInMinutes < 120; 
         });
 
@@ -35,14 +34,12 @@ export function WebinarRoom() {
         const scheduleDate = new Date(activeSchedule.startDate);
         setCurrentSessionStart(activeSchedule.startDate);
 
-        // CÁLCULO MATEMÁTICO DO TIMER UNIVERSAL
+        // CÁLCULO MATEMÁTICO: (Agora - Início do Evento) = Segundo exato da Live
         const diffSeconds = (now - scheduleDate) / 1000;
 
         if (diffSeconds < 0) {
             setStatus('waiting');
         } else {
-            // Se Joana abriu às 10:31:30 e começou às 10:30:00, diff é 90s.
-            // Se José abrir 10 segundos depois, o "now" dele será maior, resultando em 100s.
             setStartTime(Math.floor(diffSeconds));
             setStatus('live');
         }
@@ -57,7 +54,7 @@ export function WebinarRoom() {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     setWebinar(data);
-                    // Calcula o tempo UNIVERSAL antes de liberar o status 'live'
+                    // Calcula o tempo IMEDIATAMENTE após receber dados do Firebase
                     checkSchedule(data); 
                 } else {
                     setStatus('error');
@@ -69,14 +66,14 @@ export function WebinarRoom() {
         fetchWebinar();
     }, [id, checkSchedule]);
 
-    // Mantém o status atualizado caso o aluno deixe a página aberta esperando começar
+    // Mantém o status atualizado se o aluno estiver na tela de espera
     useEffect(() => {
         if (status === 'loading') return;
         const interval = setInterval(() => checkSchedule(webinar), 30000);
         return () => clearInterval(interval);
     }, [webinar, status, checkSchedule]);
 
-    // TELA DE CARREGAMENTO: Só sai daqui quando o startTime for calculado
+    // Spinner de carregamento (Segura a renderização para não resetar o vídeo no F5)
     if (status === 'loading' || (status === 'live' && startTime === null)) {
         return (
             <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
@@ -89,7 +86,7 @@ export function WebinarRoom() {
         return (
             <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center text-white flex-col gap-4">
                 <AlertCircle size={48} className="text-red-500" />
-                <h1 className="text-2xl font-bold text-center">Webinar não encontrado</h1>
+                <h1 className="text-2xl font-bold">Webinar não encontrado</h1>
             </div>
         );
     }
@@ -107,12 +104,12 @@ export function WebinarRoom() {
                                 <h1 className="text-3xl font-bold">A aula começará em breve</h1>
                             </div>
                         ) : (
-                            /* SÓ MONTA O PLAYER QUANDO O STARTTIME FOR DEFINIDO */
+                            /* O player só é montado quando o startTime é calculado */
                             startTime !== null && (
                                 <FakeLivePlayer 
                                     videoId={webinar.videoId} 
                                     startTime={startTime} 
-                                    key={`${webinar.videoId}-${startTime}`} // Força reset se o tempo mudar drasticamente
+                                    key={`player-${startTime}`} // A KEY força o reset no tempo correto
                                 />
                             )
                         )}
@@ -133,7 +130,7 @@ export function WebinarRoom() {
 }
 
 function FakeLivePlayer({ videoId, startTime }) {
-  // Usamos o subdomínio correto vz-69adbbef-538 e passamos o currentTime calculado
+  // URL configurada com o subdomínio correto da sua conta Panda (69adbbef-538)
   const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false&video_id=${videoId}`;
 
   return (
@@ -146,7 +143,7 @@ function FakeLivePlayer({ videoId, startTime }) {
         style={{ border: 'none' }}
         referrerPolicy="origin" 
       ></iframe>
-      {/* Impede que o usuário pause ou pule o vídeo, mantendo a sensação de live */}
+      {/* Camada invisível para simular Live e impedir que o aluno pule o vídeo */}
       <div className="absolute inset-0 z-10 bg-transparent cursor-default"></div> 
     </div>
   );
