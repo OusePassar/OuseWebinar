@@ -169,7 +169,8 @@ export function WebinarRoom() {
  * @param {number} startTime - Segundo onde o vídeo deve começar
  */
 function FakeLivePlayer({ videoId, startTime }) {
-  const pandaUrl = `https://player-vz-7023366c-48c.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false`;
+  // ATUALIZADO: Usando o subdomínio correto vz-69adbbef-538
+  const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false`;
 
   return (
     <div className="relative w-full h-full bg-black">
@@ -181,6 +182,7 @@ function FakeLivePlayer({ videoId, startTime }) {
         style={{ border: 'none' }}
         referrerPolicy="origin" 
       ></iframe>
+      {/* Camada para impedir interação com o player e manter a sensação de "Live" */}
       <div className="absolute inset-0 z-10 bg-transparent cursor-default"></div> 
     </div>
   );
