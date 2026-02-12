@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -8,11 +8,13 @@ import { Clock, AlertCircle } from 'lucide-react';
 
 export function WebinarRoom() {
     const { id } = useParams();
-    
     const [webinar, setWebinar] = useState(null);
     const [status, setStatus] = useState('loading'); 
     const [startTime, setStartTime] = useState(null); 
     const [currentSessionStart, setCurrentSessionStart] = useState(null);
+    
+    // Usamos um Ref para garantir que o cálculo só aconteça uma vez por carregamento
+    const hasCalculated = useRef(false);
 
     const checkSchedule = useCallback((data) => {
         if (!data || !data.schedules) return;
@@ -32,14 +34,16 @@ export function WebinarRoom() {
         const scheduleDate = new Date(activeSchedule.startDate);
         setCurrentSessionStart(activeSchedule.startDate);
 
-        // CÁLCULO DO TIMER UNIVERSAL
         const diffSeconds = (now - scheduleDate) / 1000;
 
         if (diffSeconds < 0) {
             setStatus('waiting');
         } else {
-            setStartTime(Math.floor(diffSeconds));
+            // Sincronização Absoluta
+            const timeToStart = Math.floor(diffSeconds);
+            setStartTime(timeToStart);
             setStatus('live');
+            hasCalculated.current = true;
         }
     }, []);
 
@@ -63,13 +67,7 @@ export function WebinarRoom() {
         fetchWebinar();
     }, [id, checkSchedule]);
 
-    useEffect(() => {
-        if (status === 'loading') return;
-        const interval = setInterval(() => checkSchedule(webinar), 30000);
-        return () => clearInterval(interval);
-    }, [webinar, status, checkSchedule]);
-
-    // O Spinner bloqueia a renderização do player no segundo ZERO
+    // Spinner robusto que impede o player de carregar no segundo 0
     if (status === 'loading' || (status === 'live' && startTime === null)) {
         return (
             <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
@@ -78,19 +76,9 @@ export function WebinarRoom() {
         );
     }
 
-    if (status === 'error') {
-        return (
-            <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center text-white flex-col gap-4">
-                <AlertCircle size={48} className="text-red-500" />
-                <h1 className="text-2xl font-bold">Webinar não encontrado</h1>
-            </div>
-        );
-    }
-
     return (
         <div className="min-h-screen bg-[#0F0F0F] flex flex-col font-sans overflow-hidden">
              <div className="shrink-0"><Header /></div>
-             
              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden h-full">
                  <main className="flex-1 bg-black flex flex-col relative overflow-y-auto">
                     <div className="w-full bg-black aspect-video relative flex items-center justify-center shadow-2xl z-10 border-b border-white/5">
@@ -100,14 +88,12 @@ export function WebinarRoom() {
                                 <h1 className="text-3xl font-bold">A aula começará em breve</h1>
                             </div>
                         ) : (
-                            /* O Player só é montado após o cálculo do startTime */
-                            startTime !== null && (
-                                <FakeLivePlayer 
-                                    videoId={webinar.videoId} 
-                                    startTime={startTime} 
-                                    key={`live-player-${startTime}`} // Força sincronia no F5
-                                />
-                            )
+                            // A KEY dinâmica força o player a carregar no tempo certo e ignora cache
+                            <FakeLivePlayer 
+                                key={`player-${id}-${startTime}`} 
+                                videoId={webinar.videoId} 
+                                startTime={startTime} 
+                            />
                         )}
                     </div>
 
@@ -126,7 +112,8 @@ export function WebinarRoom() {
 }
 
 function FakeLivePlayer({ videoId, startTime }) {
-  const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false`;
+  // Adicionamos um parâmetro t= no final da URL para quebrar qualquer cache de sessão do Panda
+  const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false&t=${startTime}`;
 
   return (
     <div className="relative w-full h-full bg-black">
