@@ -169,12 +169,14 @@ export function WebinarRoom() {
  * @param {number} startTime - Segundo onde o vídeo deve começar
  */
 function FakeLivePlayer({ videoId, startTime }) {
-  // ATUALIZADO: Usando o subdomínio correto vz-69adbbef-538
-  const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false`;
+  // Adicionamos um timestamp random no final apenas para garantir que o player ignore sessões anteriores
+  // e o startTime força o ponto exato da "Live"
+  const pandaUrl = `https://player-vz-69adbbef-538.tv.pandavideo.com.br/embed/?v=${videoId}&currentTime=${startTime}&autoplay=true&controls=false&video_id=${videoId}&t=${Date.now()}`;
 
   return (
     <div className="relative w-full h-full bg-black">
       <iframe 
+        key={startTime} // <--- ISSO É VITAL: Força o React a resetar o iframe no tempo certo
         src={pandaUrl} 
         className="absolute top-0 left-0 w-full h-full" 
         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" 
@@ -182,7 +184,8 @@ function FakeLivePlayer({ videoId, startTime }) {
         style={{ border: 'none' }}
         referrerPolicy="origin" 
       ></iframe>
-      {/* Camada para impedir interação com o player e manter a sensação de "Live" */}
+      
+      {/* Camada transparente para simular live e impedir que o aluno pause ou pule o vídeo */}
       <div className="absolute inset-0 z-10 bg-transparent cursor-default"></div> 
     </div>
   );
